@@ -43,6 +43,11 @@ router.post(
   upload.single("file"),
   assignmentsController.saveAssignmentFile,
 );
+router.post(
+  "/assign/:assignId/save-combined",
+  upload.single("file"),
+  assignmentsController.saveAssignmentCombined,
+);
 
 // FOROS
 router.get("/forum/:forumId/discussions", forumsController.getForumDiscussions);

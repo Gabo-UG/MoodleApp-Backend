@@ -120,3 +120,82 @@ export async function saveAssignmentFile(req, res) {
     res.status(500).json({ ok: false, error: errorMsg });
   }
 }
+
+// Guarda la entrega combinada (texto + archivo) de una tarea
+export async function saveAssignmentCombined(req, res) {
+  try {
+    const token = getUserAuth(req);
+    if (!token) {
+      return res.status(401).json({ ok: false, error: "Falta token" });
+    }
+
+    const { text } = req.body;
+    const hasFile = !!req.file;
+    const hasText = text && text.trim().length > 0;
+
+    if (!hasFile && !hasText) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: "Debe proporcionar al menos texto o un archivo" 
+      });
+    }
+
+    let draftItemId = null;
+
+    // Si hay archivo, subirlo primero
+    if (hasFile) {
+      const uploadUrl = `${MOODLE_BASE}/webservice/upload.php`;
+      const form = new FormData();
+      form.append("token", token);
+      form.append("file", req.file.buffer, req.file.originalname);
+
+      console.log("Subiendo archivo a Moodle:", uploadUrl);
+
+      const uploadRes = await axios.post(uploadUrl, form, {
+        headers: form.getHeaders(),
+      });
+
+      const uploadedFiles = uploadRes.data;
+      console.log("Respuesta de Moodle:", uploadedFiles);
+
+      if (uploadedFiles.error) {
+        throw new Error(uploadedFiles.error);
+      }
+      if (!Array.isArray(uploadedFiles) || uploadedFiles.length === 0) {
+        if (uploadedFiles.exception) {
+          throw new Error(uploadedFiles.message);
+        }
+        throw new Error("Error desconocido al subir archivo al Draft Area");
+      }
+
+      draftItemId = uploadedFiles[0].itemid;
+    }
+
+    // Preparar los datos para la llamada a Moodle
+    const submissionData = {
+      assignmentid: req.params.assignId,
+    };
+
+    // Agregar texto si existe
+    if (hasText) {
+      submissionData["plugindata[onlinetext_editor][text]"] = text;
+      submissionData["plugindata[onlinetext_editor][format]"] = 1;
+      submissionData["plugindata[onlinetext_editor][itemid]"] = 0;
+    }
+
+    // Agregar archivo si existe
+    if (draftItemId) {
+      submissionData["plugindata[files_filemanager]"] = draftItemId;
+    }
+
+    console.log("Guardando entrega con datos:", submissionData);
+
+    const result = await moodleCall(req, "mod_assign_save_submission", submissionData);
+
+    res.json({ ok: true, result });
+  } catch (e) {
+    const errorMsg = e.response?.data?.message || e.message || "Error desconocido";
+    console.error("Error en saveAssignmentCombined:", errorMsg);
+    res.status(500).json({ ok: false, error: errorMsg });
+  }
+}
