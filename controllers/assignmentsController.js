@@ -10,7 +10,30 @@ export async function getCourseAssignments(req, res) {
     const data = await moodleCall(req, "mod_assign_get_assignments", {
       "courseids[0]": courseId,
     });
-    res.json({ ok: true, assignments: data.courses?.[0]?.assignments || [] });
+    
+    // Obtener las secciones del curso para mapear cada assignment a su sección
+    const sections = await moodleCall(req, "core_course_get_contents", {
+      courseid: courseId,
+    });
+    
+    // Crear un mapa de instance -> sectionName
+    const sectionMap = {};
+    sections.forEach((section) => {
+      const sectionName = section.section === 0 ? "General" : `Unidad ${section.section}`;
+      section.modules.forEach((module) => {
+        if (module.modname === "assign") {
+          sectionMap[module.instance] = sectionName;
+        }
+      });
+    });
+    
+    // Agregar sectionName a cada assignment
+    const assignments = (data.courses?.[0]?.assignments || []).map(assignment => ({
+      ...assignment,
+      sectionName: sectionMap[assignment.id] || "Sin sección"
+    }));
+    
+    res.json({ ok: true, assignments });
   } catch (e) {
     console.error("Error en getCourseAssignments:", e.message);
     res.status(500).json({ ok: false, error: e.message });
@@ -223,4 +246,52 @@ export async function saveAssignmentCombined(req, res) {
     console.error("Error en saveAssignmentCombined:", errorMsg);
     res.status(500).json({ ok: false, error: errorMsg });
   }
+
+  const getAssignments = async (req, res) => {
+  try {
+    const courseId = req.params.courseId;
+    const token = req.user.token;
+
+    const response = await fetch(
+      `${MOODLE_URL}?wstoken=${token}&wsfunction=mod_assign_get_assignments&moodlewsrestformat=json&courseids[0]=${courseId}`
+    );
+
+    const data = await response.json();
+
+    // Obtener información de las secciones del curso
+    const sectionsResponse = await fetch(
+      `${MOODLE_URL}?wstoken=${token}&wsfunction=core_course_get_contents&moodlewsrestformat=json&courseid=${courseId}`
+    );
+    const sectionsData = await sectionsResponse.json();
+
+    // Mapear cada módulo a su sección
+    const sectionMap = {};
+    sectionsData.forEach((section) => {
+      section.modules.forEach((module) => {
+        sectionMap[module.instance] = {
+          sectionId: section.section,
+          sectionName: section.section === 0 ? "General" : `Unidad ${section.section}`
+        };
+      });
+    });
+
+    console.log("=== MAPA DE SECCIONES ===");
+    console.log(JSON.stringify(sectionMap, null, 2));
+
+    // Agregar sectionName a cada assignment
+    const assignmentsWithSection = data.courses[0].assignments.map((assignment) => ({
+      ...assignment,
+      sectionName: sectionMap[assignment.id]?.sectionName || "Sin sección",
+      sectionId: sectionMap[assignment.id]?.sectionId
+    }));
+
+    console.log("=== ASSIGNMENTS CON SECCIÓN ===");
+    console.log(JSON.stringify(assignmentsWithSection.slice(0, 2), null, 2));
+
+    res.json({ ok: true, assignments: assignmentsWithSection });
+  } catch (error) {
+    console.error("Error obteniendo assignments:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
 }

@@ -41,7 +41,7 @@ const keepAlive = setInterval(() => {
 
 // Asegurar que el servidor se mantenga corriendo
 server.on('close', () => {
-  console.log('⚠️  Servidor cerrado');
+  console.log('Servidor cerrado');
   clearInterval(keepAlive);
 });
 
