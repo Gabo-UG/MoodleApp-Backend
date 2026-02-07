@@ -25,7 +25,11 @@ router.use(requireAuth);
 router.get("/courses", coursesController.getCourses);
 router.get("/course/:courseId/contents", coursesController.getCourseContents);
 router.get("/course/:courseId/grades", coursesController.getCourseGrades);
-router.get("/course/:courseId/assignments", assignmentsController.getCourseAssignments);
+router.get("/course/:courseId/participants", coursesController.getParticipants);
+router.get(
+  "/course/:courseId/assignments",
+  assignmentsController.getCourseAssignments,
+);
 router.get("/course/:courseId/forums", forumsController.getCourseForums);
 
 // TAREAS
@@ -42,6 +46,11 @@ router.post(
   "/assign/:assignId/save-file",
   upload.single("file"),
   assignmentsController.saveAssignmentFile,
+);
+router.post(
+  "/assign/:assignId/save-combined",
+  upload.array("file", 20),
+  assignmentsController.saveAssignmentCombined,
 );
 
 // FOROS

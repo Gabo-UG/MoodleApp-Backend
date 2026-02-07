@@ -3,10 +3,34 @@ import { moodleCall } from "../helpers/moodle.js";
 // Obtiene los detalles de todos los foros de un curso
 export async function getCourseForums(req, res) {
   try {
+    const courseId = parseInt(req.params.courseId);
     const data = await moodleCall(req, "mod_forum_get_forums_by_courses", {
-      "courseids[0]": req.params.courseId,
+      "courseids[0]": courseId,
     });
-    res.json({ ok: true, forums: data || [] });
+    
+    // Obtener las secciones del curso para mapear cada forum a su sección
+    const sections = await moodleCall(req, "core_course_get_contents", {
+      courseid: courseId,
+    });
+    
+    // Crear un mapa de instance -> sectionName
+    const sectionMap = {};
+    sections.forEach((section) => {
+      const sectionName = section.section === 0 ? "General" : `Unidad ${section.section}`;
+      section.modules.forEach((module) => {
+        if (module.modname === "forum") {
+          sectionMap[module.instance] = sectionName;
+        }
+      });
+    });
+    
+    // Agregar sectionName a cada forum
+    const forums = (data || []).map(forum => ({
+      ...forum,
+      sectionName: sectionMap[forum.id] || "Sin sección"
+    }));
+    
+    res.json({ ok: true, forums });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
